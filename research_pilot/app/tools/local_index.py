@@ -71,13 +71,13 @@ def chunk_pages(
                 )
                 idx += 1
 
-            # If we reached the end, stop. This prevents infinite loops.
+            # If reached the end, stop. This prevents infinite loops.
             if end >= n:
                 break
 
             next_start = end - overlap
 
-            # Safety: if we didn't move forward, stop (prevents no-progress loops).
+            # Safety: if didn't move forward, stop (prevents no-progress loops).
             if next_start <= start:
                 break
 
