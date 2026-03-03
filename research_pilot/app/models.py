@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 
 
@@ -11,11 +11,10 @@ class ResearchRequest(BaseModel):
 class Source(BaseModel):
     title: str
     url: str
-    snippet: Optional[str] = None
-    doc_id: Optional[str] = None
-    page: Optional[int] = None
-    chunk_id: Optional[str] = None
-
+    snippet: str
+    doc_id: str
+    page: int
+    chunk_id: str
 
 class ExtractedClaim(BaseModel):
     claim: str
@@ -34,15 +33,26 @@ class Citation(BaseModel):
     chunk_id: Optional[str] = None
     quote: Optional[str] = None 
 
+class Claim(BaseModel):
+    text: str
+    citations: List[Citation] = []
+
+class Disagreement(BaseModel):
+    topic: str
+    sides: List[str] = []
 
 class ResearchResponse(BaseModel):
     question: str
-    plan: List[str]
-    sources: List[Source]
-    claims: List[ExtractedClaim]
-    answer: str
-    citations: List[Citation]
-    disagreements: List[str]
-    open_questions: List[str]
+    plan: List[str] = []
+    sources: List[Source] = []
+    answer: str = ""
+
+    # add defaults so pydantic doesn’t error
+    claims: List[Claim] = []
+    citations: List[Citation] = []
+    disagreements: List[Disagreement] = []
+    open_questions: List[str] = []
+
+    debug: Optional[Dict[str, Any]] = None
 
     
