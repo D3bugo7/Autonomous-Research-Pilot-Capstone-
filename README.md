@@ -4,8 +4,9 @@ An **agentic research assistant** that answers questions by reading from a local
 Instead of “chatbot vibes,” the goal is: **plan → retrieve → synthesize → cite**.
 
 In other words:
-The Autonomous Research Pilot is an agentic LLM system designed to perform citation-grounded research across multiple PDFs. Instead of answering from general knowledge, the system retrieves relevant document chunks, reasons over them, and generates structured responses where every claim is backed by a traceable citation (document, page, and chunk).
-Built using a local embedding-based retrieval system, LangGraph for orchestration, and a Llama-based model via Ollama, the entire pipeline runs locally. The result is a self-contained, multi-document research assistant focused on transparency, grounding, and verifiable reasoning
+
+- The Autonomous Research Pilot is an agentic LLM system designed to perform citation-grounded research across multiple PDFs. Instead of answering from general knowledge, the system retrieves relevant document chunks, reasons over them, and generates structured responses where every claim is backed by a traceable citation (document, page, and chunk).
+- Built using a local embedding-based retrieval system, LangGraph for orchestration, and a Llama-based model via Ollama, the entire pipeline runs locally. The result is a self-contained, multi-document research assistant focused on transparency, grounding, and verifiable reasoning
 ---
 
 ## What it does
