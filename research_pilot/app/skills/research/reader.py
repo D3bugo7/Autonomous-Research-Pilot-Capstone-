@@ -18,7 +18,6 @@ def _split_sentences(text: str) -> List[str]:
     text = re.sub(r"\s+", " ", (text or "").strip())
     if not text:
         return []
-    # keep it simple for MVP
     return [s.strip() for s in _SENT_SPLIT.split(text) if len(s.strip()) > 20]
 
 
