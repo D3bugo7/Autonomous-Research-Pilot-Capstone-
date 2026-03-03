@@ -5,7 +5,6 @@ from typing import Any, Dict, List
 
 import fitz  # PyMuPDF
 
-# MVP safety limits
 MAX_PAGES = 10
 CHUNK_SIZE = 1200
 CHUNK_OVERLAP = 200
