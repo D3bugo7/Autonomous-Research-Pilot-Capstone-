@@ -55,4 +55,3 @@ class ResearchResponse(BaseModel):
 
     debug: Optional[Dict[str, Any]] = None
 
-    

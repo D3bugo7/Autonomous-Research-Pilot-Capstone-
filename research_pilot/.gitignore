@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# venv
+.venv/
+venv/
+
+# Local DB
+*.db
+
+# Upload folders / runtime files
+research_pilot/app/user_uploads/
+research_pilot/user_uploads/
+
+# OS junk
+.DS_Store
+
+# Node
+node_modules/
+dist/

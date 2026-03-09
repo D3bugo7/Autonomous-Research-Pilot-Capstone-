@@ -27,7 +27,6 @@ def extract_claims(question: str, sources: List[Source]) -> List[ExtractedClaim]
     for s in sources:
         sentences = _split_sentences(s.snippet)
 
-        # pick up to ~3 claimy sentences per source
         picked = []
         for sent in sentences:
             low = f" {sent.lower()} "
@@ -36,28 +35,22 @@ def extract_claims(question: str, sources: List[Source]) -> List[ExtractedClaim]
             if len(picked) >= 3:
                 break
 
-        # fallback: if nothing matched, just take first sentence
+
         if not picked and sentences:
             picked = [sentences[0]]
 
         for sent in picked:
             claims.append(
                 ExtractedClaim(
-                    claim=sent,          # real sentence from source
-                    evidence=sent,       # keep evidence tight for now
+                    claim=sent,
+                    evidence=sent,
                     source_url=s.url,
+                    doc_id=s.doc_id,
+                    page=s.page,
+                    chunk_id=s.chunk_id,
                 )
             )
-        claims.append(
-            ExtractedClaim(
-                claim=sent,
-                evidence=sent,
-                source_url=s.url,
-             doc_id=s.doc_id,
-                page=s.page,
-                chunk_id=s.chunk_id,
-            )
-        )
-
+            
     return claims
+
 

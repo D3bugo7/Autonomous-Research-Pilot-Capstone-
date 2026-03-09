@@ -9,6 +9,7 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 
 from app import state
 
+
 def _list_pdfs(folder: str) -> List[str]:
     if not os.path.exists(folder):
         return []

@@ -1,55 +1,96 @@
-from typing import List
+from typing import List, Optional
 from pathlib import Path
-from app import state
+
 from app.models import Source
-from app.tools.local_index import build_local_index, naive_retrieve, HuggingFaceEmbeddings
+from app.tools.local_index import build_local_index, naive_retrieve
 
-DOC_DIR = Path(__file__).resolve().parents[2] / "documents"
-
-CANDIDATE_K = 25   
-FINAL_K = 8       
+CANDIDATE_K = 25
+FINAL_K = 14
 
 
-def retrieve_sources(question: str) -> List[Source]:
-    if state.local_index is None:
-        with state.index_lock:
-            if state.local_index is None:
-                DOC_DIR.mkdir(exist_ok=True)
-                print("INDEX: building from", DOC_DIR)
-                state.local_index = build_local_index(DOC_DIR)
-                print("INDEX: built, chunks =", len(state.local_index.chunks))
+def _pretty_doc_id(raw_doc_id: str) -> str:
+    if not raw_doc_id:
+        return "unknown_doc"
+    # uploaded PDFs are stored as: "<uuid>__<original_name>.pdf"
+    return raw_doc_id.split("__", 1)[-1]
 
-    if not state.local_index or not state.local_index.chunks:
+
+def _diversify_chunks(chunks: list[dict], max_per_doc: int = 3, max_total: int = 12):
+    per_doc: dict[str, int] = {}
+    seen_doc_page = set()
+    out: list[dict] = []
+
+    for c in chunks:
+        raw_doc = c.get("doc_id") or ""
+        doc = _pretty_doc_id(raw_doc)
+        page = c.get("page")
+        key = (doc, page)
+
+        # prevent multiple chunks from same page
+        if key in seen_doc_page:
+            continue
+
+        per_doc.setdefault(doc, 0)
+        if per_doc[doc] >= max_per_doc:
+            continue
+
+        # normalize doc_id on the chunk so downstream uses the pretty name
+        c["doc_id"] = doc
+
+        out.append(c)
+        per_doc[doc] += 1
+        seen_doc_page.add(key)
+
+        if len(out) >= max_total:
+            break
+
+    return out
+
+
+def retrieve_sources(
+    question: str,
+    user_dir: Path,
+    allowed_paths: Optional[list[str]] = None,
+) -> List[Source]:
+    """
+    Build an index from a specific user's upload directory,
+    retrieve relevant chunks, and optionally filter to selected PDFs.
+    """
+    user_dir.mkdir(parents=True, exist_ok=True)
+
+    print("INDEX: building from", user_dir)
+    index = build_local_index(user_dir)
+    print("INDEX: built, chunks =", len(index.chunks))
+
+    if not index.chunks:
         return [
-            Source(title="No local PDFs indexed", url="", snippet="Add PDFs to app/documents and restart the server.")
+            Source(
+                title="No PDFs indexed",
+                url="",
+                snippet="No PDFs found in your uploaded documents.",
+            )
         ]
 
-     # Step 1: retrieve candidates 
-    chunks = naive_retrieve(state.local_index, question, top_k=CANDIDATE_K)
+    # 1) retrieve
+    chunks = naive_retrieve(index, question, top_k=CANDIDATE_K)
 
-    # Step 2 (later): rerank candidates using trained model
-    # chunks = rerank(question, chunks)  # <-- training plugin point
+    # 2) filter to selected PDFs first
+    if allowed_paths:
+        allowed = set(allowed_paths)
+        chunks = [c for c in chunks if c.get("path") in allowed]
 
-    # Step 3: return top evidence chunks
-    chunks = naive_retrieve(state.local_index, question, top_k=CANDIDATE_K)
+    # 3) diversify + normalize doc_id
+    chunks = _diversify_chunks(chunks, max_per_doc=3, max_total=12)
 
+    # 4) convert to Source objects
     return [
-    Source(
-        title=f"{c['doc_id']} (page {c['page']})",
-        url=c["path"],
-        snippet=c["text"][:600],
-        doc_id=c["doc_id"],
-        page=c["page"],
-        chunk_id=c.get("chunk_id"),
-    )
-    for c in chunks[:FINAL_K]
-]
-
-_embeddings = None
-
-def _build_embeddings():
-    global _embeddings
-    if _embeddings is not None:
-        return _embeddings
-    _embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-    return _embeddings
+        Source(
+            title=f"{c['doc_id']} (page {c['page']})",
+            url=c["path"],
+            snippet=c["text"][:600],
+            doc_id=c["doc_id"],
+            page=c["page"],
+            chunk_id=c.get("chunk_id"),
+        )
+        for c in chunks[:FINAL_K]
+    ]

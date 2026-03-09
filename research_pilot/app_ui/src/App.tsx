@@ -27,7 +27,7 @@ export default function App() {
     setLoading(true);
 
     try {
-      const resp = await postResearch({ question: question.trim() }, baseUrl.trim());
+      const resp = await postResearch(baseUrl.trim(), "", { question: question.trim(), doc_ids: [] });
       setData(resp);
     } catch (e: any) {
       setErr(e?.message ?? "Something went wrong.");

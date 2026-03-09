@@ -3,8 +3,8 @@ from app.skills.research.retriever import retrieve_sources
 from app.skills.research.reader import extract_claims
 from app.skills.research.synthesizer import synthesize_answer
 
-def run_research(question: str, do_claims: bool = True) -> ResearchResponse:
-    print("WORKFLOW: run_research start")
+def run_research(question: str, allowed_paths: list[str] | None = None, do_claims: bool = True) -> ResearchResponse:
+    sources = retrieve_sources(question, allowed_paths=allowed_paths)
 
     plan = [
         "Clarify the question intent and key terms",
