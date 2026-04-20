@@ -15,7 +15,26 @@ def _pretty_doc_id(raw_doc_id: str) -> str:
     return raw_doc_id.split("__", 1)[-1]
 
 
-def _diversify_chunks(chunks: list[dict], max_per_doc: int = 3, max_total: int = 12):
+def _is_calc_query(question: str) -> bool:
+    q = (question or "").lower()
+    triggers = [
+        "total",
+        "combined",
+        "sum",
+        "points",
+        "worth",
+        "score",
+        "how many points",
+        "altogether",
+    ]
+    return any(t in q for t in triggers)
+
+
+def _diversify_chunks(
+    chunks: list[dict],
+    max_per_doc: int = 3,
+    max_total: int = 12,
+):
     per_doc: dict[str, int] = {}
     seen_doc_page = set()
     out: list[dict] = []
@@ -71,26 +90,32 @@ def retrieve_sources(
             )
         ]
 
-    # 1) retrieve
-    chunks = naive_retrieve(index, question, top_k=CANDIDATE_K)
+    calc_query = _is_calc_query(question)
 
-    # 2) filter to selected PDFs first
+    # retrieve more aggressively for numeric / structured questions
+    retrieve_k = 40 if calc_query else CANDIDATE_K
+    chunks = naive_retrieve(index, question, top_k=retrieve_k)
+
+    # filter to selected PDFs first
     if allowed_paths:
         allowed = set(allowed_paths)
         chunks = [c for c in chunks if c.get("path") in allowed]
 
-    # 3) diversify + normalize doc_id
-    chunks = _diversify_chunks(chunks, max_per_doc=3, max_total=12)
+    # diversify after filtering
+    chunks = _diversify_chunks(
+        chunks,
+        max_per_doc=5 if calc_query else 3,
+        max_total=18 if calc_query else 12,
+    )
 
-    # 4) convert to Source objects
     return [
         Source(
             title=f"{c['doc_id']} (page {c['page']})",
             url=c["path"],
-            snippet=c["text"][:600],
+            snippet=c["text"][:1200] if calc_query else c["text"][:600],
             doc_id=c["doc_id"],
             page=c["page"],
             chunk_id=c.get("chunk_id"),
         )
-        for c in chunks[:FINAL_K]
+        for c in chunks[:FINAL_K if not calc_query else 18]
     ]

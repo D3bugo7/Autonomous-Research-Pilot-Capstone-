@@ -1,10 +1,21 @@
+from pathlib import Path
 from app.models import ResearchResponse
 from app.skills.research.retriever import retrieve_sources
 from app.skills.research.reader import extract_claims
 from app.skills.research.synthesizer import synthesize_answer
 
-def run_research(question: str, allowed_paths: list[str] | None = None, do_claims: bool = True) -> ResearchResponse:
-    sources = retrieve_sources(question, allowed_paths=allowed_paths)
+
+def run_research(
+    question: str,
+    user_dir: Path,
+    allowed_paths: list[str] | None = None,
+    do_claims: bool = True,
+) -> ResearchResponse:
+    sources = retrieve_sources(
+        question=question,
+        user_dir=user_dir,
+        allowed_paths=allowed_paths,
+    )
 
     plan = [
         "Clarify the question intent and key terms",
@@ -13,8 +24,6 @@ def run_research(question: str, allowed_paths: list[str] | None = None, do_claim
         "Synthesize an answer with citations and note disagreements",
     ]
 
-    sources = retrieve_sources(question)
-
     claims = extract_claims(question, sources) if do_claims else []
 
     answer, citations, disagreements, open_qs = synthesize_answer(
@@ -22,8 +31,6 @@ def run_research(question: str, allowed_paths: list[str] | None = None, do_claim
         sources=sources,
         claims=claims,
     )
-
-    print("WORKFLOW: run_research done")
 
     return ResearchResponse(
         question=question,

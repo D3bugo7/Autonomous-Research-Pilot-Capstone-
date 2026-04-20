@@ -2,6 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List
+import re
 
 import fitz  # PyMuPDF
 
@@ -106,17 +107,45 @@ def build_local_index(doc_dir: str | Path) -> LocalIndex:
     return LocalIndex(chunks=chunks)
 
 
+
+
+CALC_WORDS = {"total", "combined", "sum", "points", "worth", "score"}
+RUBRIC_WORDS = {
+    "total", "points", "possible score", "grading checklist",
+    "problem", "score", "comments"
+}
+
 def naive_retrieve(index: LocalIndex, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
     if not index.chunks:
         return []
-    q_tokens = [t for t in query.lower().split() if len(t) > 2]
-    if not q_tokens:
-        return index.chunks[:top_k]
+
+    q = query.lower()
+    q_tokens = [t for t in re.findall(r"\w+", q) if len(t) > 2]
+    is_calc_query = any(w in q for w in CALC_WORDS)
+
     scored: List[tuple[int, Dict[str, Any]]] = []
+
     for c in index.chunks:
         text = c["text"].lower()
-        score = sum(1 for t in q_tokens if t in text)
+        score = 0
+
+        # token overlap
+        score += sum(2 for t in q_tokens if t in text)
+
+        # bonus for rubric / grading language on calculation questions
+        if is_calc_query:
+            score += sum(5 for w in RUBRIC_WORDS if w in text)
+
+            # bonus for bracketed point patterns like [40 points]
+            if re.search(r"\[\s*\d+\s*points?\s*\]", text):
+                score += 8
+
+            # bonus for TOTAL lines
+            if "total" in text:
+                score += 10
+
         if score > 0:
             scored.append((score, c))
+
     scored.sort(key=lambda x: x[0], reverse=True)
     return [c for _, c in scored[:top_k]]
