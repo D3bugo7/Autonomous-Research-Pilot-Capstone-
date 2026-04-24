@@ -31,7 +31,10 @@ def _extract_citation_keys(sentence: str) -> List[Tuple[str, int, str]]:
     return uniq
 
 def route_request(req: ResearchRequest) -> ResearchResponse:
-    out = _graph.invoke({"question": req.question})
+    out = _graph.invoke({
+    "question": req.question,
+    "user_dir": req.user_dir,  # or however you store uploads
+})
 
     # Build sources from graph evidence
     sources: List[Source] = []

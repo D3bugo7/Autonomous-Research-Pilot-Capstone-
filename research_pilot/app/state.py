@@ -1,9 +1,19 @@
-from typing import Any, Optional
-import threading
+from typing import TypedDict, List, Optional
+from app.models import Source, Citation, Claim
 
-local_index: Optional[Any] = None
-index_lock = threading.Lock()
-index_manifest = None
+class ResearchState(TypedDict, total=False):
+    question: str
+    user_dir: str
 
-# app/state.py
-local_indices = {}   # user_id -> LocalIndex
+    # pipeline
+    sources: List[Source]
+    claims: List[Claim]
+
+    # outputs
+    answer: str
+    citations: List[Citation]
+    disagreements: List[str]
+    open_questions: List[str]
+
+    # control
+    retry_count: int

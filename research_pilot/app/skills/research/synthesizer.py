@@ -308,16 +308,15 @@ def _build_prompt(question: str, evidence_text: str, doc_list: List[str], mode: 
 
     if mode == "structured":
         return f"""
-You are a research assistant. Answer using ONLY the evidence blocks below.
+You are an academic research assistant.
 
-Rules:
-- Do not invent facts not stated in the evidence.
-- Cite each substantive claim with evidence labels like (E1), (E2), or (E3).
-- Keep the response clear, natural, and useful.
-- Use the paper mapping below when referring to documents.
-- If the evidence is incomplete, weak, or conflicting, include a short Limits section.
-- If the evidence is strong and clear, omit the Limits section.
-- Do not expose internal system notes or raw retrieval artifacts.
+Your task is to answer the question using ONLY the provided evidence from multiple documents.
+
+STRICT RULES:
+- Do NOT use external knowledge.
+- Every important claim MUST be supported by evidence (E#).
+- If evidence is weak or incomplete, explicitly say so.
+- Do NOT hallucinate or generalize beyond the evidence.
 
 Paper mapping:
 {paper_map}
@@ -328,31 +327,43 @@ Question:
 Evidence:
 {evidence_text}
 
-Return clean Markdown in this style:
+Return a structured research-style answer in clean Markdown:
 
-## Summary
-Write 2-4 sentences answering the question directly.
+## Research Question
+Restate the question clearly.
 
-## Document breakdown
+## Short Answer
+Provide a 2–4 sentence direct answer based ONLY on the evidence.
+
+## Evidence by Paper
 ### Paper 1: <name>
-- complete sentence with citation (E#)
-- complete sentence with citation (E#)
+- key point with citation (E#)
+- key point with citation (E#)
 
 ### Paper 2: <name>
-- complete sentence with citation (E#)
-- complete sentence with citation (E#)
+- key point with citation (E#)
+- key point with citation (E#)
 
-## Key similarities or differences
-- complete sentence with citation (E#)
-- complete sentence with citation (E#)
+## Cross-Paper Synthesis
+Summarize what the documents collectively suggest.
 
-## Limits
-- include only if needed
+## Disagreements or Differences
+- If no direct contradictions exist, describe differences in perspective, emphasis, or focus.
+- For example: critical vs optimistic, theoretical vs applied, risks vs benefits.
+- Do NOT say "no differences" unless the documents are nearly identical.
+
+## Limitations
+- Base this ONLY on evidence.
+- Do NOT say "none" unless explicitly justified.
+- Consider:
+  - missing experimental results
+  - lack of empirical validation
+  - imbalance in perspectives
 
 Important:
-- Use line breaks properly.
-- Keep bullets concise and complete.
+- Use full sentences.
 - Do not include empty sections.
+- Keep it readable and academic in tone.
 """.strip()
 
     return f"""
@@ -362,6 +373,7 @@ Rules:
 - Do not invent facts not stated in the evidence.
 - Cite important claims with evidence labels like (E1), (E2), or (E3).
 - Answer the user's question directly and naturally.
+- The Short Answer must reflect differences in perspective if present.
 - If the question is about multiple documents, synthesize the shared topic first.
 - Mention differences only if they help answer the question.
 - Do not use report-style headings unless clearly needed.
@@ -376,6 +388,8 @@ Rules:
 - If the question involves totals or calculations, extract all relevant values and compute explicitly. Do not guess.
 - Use phrases like "one document", "the other document", or the document names instead.
 - When referring to documents, prioritize meaningful descriptions over labels.
+- If a concept is not explicitly mentioned in the evidence, do not introduce it.
+- When multiple documents are provided, explicitly compare their perspectives (e.g., critical vs optimistic, theoretical vs applied).
 
 Question:
 {question}
@@ -585,9 +599,15 @@ def synthesize_answer(
 
     evidence_text = _build_evidence_blocks(sources_used)
     doc_list = _build_doc_list(sources_used)
-    mode = _question_mode(question)
-    prompt = _build_prompt(question, evidence_text, doc_list, mode)
+    doc_count = len(doc_list)
+    mode = "structured" if doc_count > 1 else "concise"
 
+    disagreement_hints = "\n".join(
+        f"- {comp.aspect}: {comp.doc_a} vs {comp.doc_b}"
+        for comp in comparisons[:5]
+    )
+
+    prompt = _build_prompt(question,evidence_text + "\n\nKnown differences:\n" + disagreement_hints,doc_list,mode)
     try:
         llm_answer = _call_ollama(prompt)
         llm_answer = _pretty_format(llm_answer)
