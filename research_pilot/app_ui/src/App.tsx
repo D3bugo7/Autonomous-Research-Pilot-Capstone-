@@ -12,7 +12,9 @@ function isProbablyUrl(s?: string) {
 }
 
 export default function App() {
-  const [baseUrl, setBaseUrl] = useState("http://127.0.0.1:8000");
+  const DEFAULT_BACKEND_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+  const [baseUrl, setBaseUrl] = useState(DEFAULT_BACKEND_URL);
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -48,7 +50,7 @@ export default function App() {
           <input
             value={baseUrl}
             onChange={(e) => setBaseUrl(e.target.value)}
-            placeholder="http://127.0.0.1:8000"
+            placeholder={DEFAULT_BACKEND_URL}
           />
         </div>
       </header>
