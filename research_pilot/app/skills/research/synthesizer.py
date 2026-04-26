@@ -5,6 +5,7 @@ import re
 from typing import List, Tuple
 
 import requests
+from openai import OpenAI
 from pathlib import Path
 from pypdf import PdfReader
 
@@ -17,9 +18,14 @@ from app.skills.research.disagreement import (
 # ----------------------------
 # Config
 # ----------------------------
+MODEL_PROVIDER = os.getenv("MODEL_PROVIDER", "ollama").lower()
+
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3")
 OLLAMA_TIMEOUT_S = float(os.getenv("OLLAMA_TIMEOUT_S", "60"))
+
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+OPENAI_TIMEOUT_S = float(os.getenv("OPENAI_TIMEOUT_S", "60"))
 
 _BOILERPLATE_PATTERNS = [
     r"\bthis document provides an in-depth analysis\b",
@@ -30,7 +36,6 @@ _BOILERPLATE_PATTERNS = [
     r"\bhighlights areas of agreement and disagreement\b",
     r"\bemphasizes evidence-based reasoning\b",
 ]
-
 
 # ----------------------------
 # Helpers
@@ -181,22 +186,40 @@ def _dedupe_sources(sources: List[Source], max_keep: int = 8) -> List[Source]:
     return out
 
 
-def _call_ollama(prompt: str) -> str:
-    url = f"{OLLAMA_HOST}/api/generate"
-    payload = {
-        "model": OLLAMA_MODEL,
-        "prompt": prompt,
-        "stream": False,
-        "options": {
-            "temperature": 0.2,
-            "num_ctx": 4096,
-        },
-    }
+def _call_llm(prompt: str) -> str:
+    if MODEL_PROVIDER == "ollama":
+        url = f"{OLLAMA_HOST}/api/generate"
+        payload = {
+            "model": OLLAMA_MODEL,
+            "prompt": prompt,
+            "stream": False,
+            "options": {
+                "temperature": 0.2,
+                "num_ctx": 4096,
+            },
+        }
 
-    r = requests.post(url, json=payload, timeout=OLLAMA_TIMEOUT_S)
-    r.raise_for_status()
-    data = r.json()
-    return (data.get("response") or "").strip()
+        r = requests.post(url, json=payload, timeout=OLLAMA_TIMEOUT_S)
+        r.raise_for_status()
+        data = r.json()
+        return (data.get("response") or "").strip()
+
+    elif MODEL_PROVIDER == "openai":
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+        response = client.chat.completions.create(
+            model=OPENAI_MODEL,
+            temperature=0.2,
+            messages=[
+                {"role": "user", "content": prompt}
+            ],
+        )
+
+        content = response.choices[0].message.content
+        return (content or "").strip()
+
+    else:
+        raise ValueError(f"Unsupported MODEL_PROVIDER: {MODEL_PROVIDER}")
 
 
 def _pretty_format(text: str) -> str:
@@ -609,7 +632,7 @@ def synthesize_answer(
 
     prompt = _build_prompt(question,evidence_text + "\n\nKnown differences:\n" + disagreement_hints,doc_list,mode)
     try:
-        llm_answer = _call_ollama(prompt)
+        llm_answer = _call_llm(prompt)
         llm_answer = _pretty_format(llm_answer)
 
         if not llm_answer:

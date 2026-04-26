@@ -17,14 +17,19 @@ UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI()
 
+frontend_origin = os.getenv("FRONTEND_ORIGIN", "http://localhost:5173")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        frontend_origin,
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 init_db()
 
 
@@ -193,3 +198,6 @@ def delete_document(
 
     return {"ok": True, "doc_id": doc_id}
 
+@app.get("/health")
+def health():
+    return {"ok": True}
