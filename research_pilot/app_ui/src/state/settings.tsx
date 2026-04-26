@@ -18,7 +18,7 @@ const Ctx = createContext<SettingsCtx | null>(null);
 
 const defaults: Settings = {
   theme: "dark",
-  backendUrl: "http://127.0.0.1:8000",
+  backendUrl: import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000",
 };
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
