@@ -1,3 +1,22 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ── Light mode: invert the dark-first UI ── */
+/* The app is built dark-first. When dark class is absent, invert all colours
+   and rotate the hue back 180° so accents (amber, indigo) stay recognisable. */
+html:not(.dark) {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+/* Re-invert elements that must NOT be inverted in light mode */
+html:not(.dark) img,
+html:not(.dark) video,
+html:not(.dark) canvas {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+/* Smooth theme transition */
+html {
+  transition: filter 0.2s ease;
+}

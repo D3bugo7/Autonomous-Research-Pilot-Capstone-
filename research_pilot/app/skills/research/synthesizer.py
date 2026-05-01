@@ -371,9 +371,12 @@ Provide a 2–4 sentence direct answer based ONLY on the evidence.
 Summarize what the documents collectively suggest.
 
 ## Disagreements or Differences
-- If no direct contradictions exist, describe differences in perspective, emphasis, or focus.
-- For example: critical vs optimistic, theoretical vs applied, risks vs benefits.
-- Do NOT say "no differences" unless the documents are nearly identical.
+CRITICAL — you MUST write at least 2 specific sentences here. Follow these rules:
+- Identify which paper is the MOST OPTIMISTIC / pro-AI and which is MOST CRITICAL / cautious. Name them explicitly.
+- State the core tension as a direct contrast, e.g. "Paper X argues AI enhances learning outcomes, while Paper Y warns it perpetuates inequality and power imbalances."
+- If papers differ in emphasis (technical vs ethical, practical vs ideological), name those dimensions explicitly.
+- Do NOT use vague phrases like "different perspectives" or "no direct contradiction." Always name papers and their specific positions.
+- NEVER leave this section empty or write "no differences."
 
 ## Limitations
 - Base this ONLY on evidence.
@@ -461,6 +464,47 @@ def _fallback_answer(question: str, sources_used: List[Source], error: Exception
             f"_Model error: {type(error).__name__}_",
         ]
     ).strip()
+
+
+def _extract_llm_disagreements(llm_answer: str) -> List[str]:
+    """
+    Parse the LLM's own '## Disagreements or Differences' section and return
+    each non-empty sentence as a separate disagreement string.
+    Falls back to an empty list if the section is absent or too short.
+    """
+    if not llm_answer:
+        return []
+
+    # Match the section header and capture everything until the next ## heading or end of string
+    pattern = re.compile(
+        r"##\s*Disagreements?\s*(?:or\s*Differences?)?\s*\n(.*?)(?=\n##|\Z)",
+        re.IGNORECASE | re.DOTALL,
+    )
+    match = pattern.search(llm_answer)
+    if not match:
+        return []
+
+    section_text = match.group(1).strip()
+    if not section_text:
+        return []
+
+    # Split into individual sentences / bullet points
+    raw_lines = re.split(r"\n+", section_text)
+    sentences: List[str] = []
+
+    for line in raw_lines:
+        # Strip leading bullet/dash/asterisk markers
+        line = re.sub(r"^[\-\*\•]\s*", "", line).strip()
+        if not line:
+            continue
+        # Split run-on text at sentence boundaries
+        for sent in re.split(r"(?<=[.!?])\s+", line):
+            sent = sent.strip()
+            if len(sent) > 20:  # ignore very short fragments
+                sentences.append(sent)
+
+    # Return up to 6 disagreement strings
+    return sentences[:6]
 
 
 def _build_open_questions(question: str, mode: str, sources_used: List[Source]) -> List[str]:
@@ -659,6 +703,11 @@ def synthesize_answer(
             f"{label} ({comp.aspect}): {comp.doc_a} says '{comp.value_a}', "
             f"while {comp.doc_b} says '{comp.value_b}'. {comp.explanation}"
         )
+
+    # Fallback: if rule-based comparisons produced nothing, extract the LLM's own
+    # "## Disagreements or Differences" section from its answer and use those sentences.
+    if not disagreements:
+        disagreements = _extract_llm_disagreements(llm_answer)
 
     open_questions = _build_open_questions(question, mode, sources_used)
 

@@ -113,6 +113,7 @@ def list_documents(
 class ResearchReq(BaseModel):
     question: str
     doc_ids: list[str] = []
+    max_sources: int = 8
 
 @app.post("/research")
 async def research(
@@ -145,6 +146,7 @@ async def research(
         req.question,
         user_dir=user_dir,
         allowed_paths=allowed_paths,
+        max_sources=max(3, min(req.max_sources, 14)),  # clamp 3–14
     )
     claims = extract_claims(req.question, sources)
     answer, citations, disagreements, open_qs = synthesize_answer(req.question, sources, claims)    

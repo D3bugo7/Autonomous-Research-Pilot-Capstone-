@@ -14,14 +14,14 @@ class NormalizedClaim:
     page: Optional[int]
     aspect: str
     subject: str
-    value: str
+    value: str  # stance: "optimistic", "critical", "balanced", "neutral"
     evidence: str
     chunk_id: Optional[str] = None
 
 
 @dataclass
 class ClaimComparison:
-    comparison_type: str  # "conflict", "difference", "insufficient_overlap"
+    comparison_type: str  # "conflict" or "difference"
     aspect: str
     subject: str
     doc_a: str
@@ -34,146 +34,136 @@ class ClaimComparison:
 
 
 # ----------------------------
+# Domain-agnostic stance keywords
+# ----------------------------
+_POSITIVE = {
+    "benefit", "benefits", "enhance", "enhances", "improve", "improves",
+    "support", "supports", "enable", "enables", "advance", "advances",
+    "effective", "effectively", "successful", "success", "positive",
+    "advantage", "advantages", "opportunity", "opportunities", "promote",
+    "promotes", "strengthen", "strengthens", "facilitate", "facilitates",
+    "valuable", "promising", "essential", "necessary", "recommend",
+    "encourages", "increase", "increases", "better", "efficient",
+    "helpful", "help", "helps", "boost", "boosts", "progress",
+    "empower", "empowers", "innovative", "innovation", "solution",
+    "solutions", "achieve", "achieves", "gain", "gains", "potential",
+    "personalised", "personalized", "adaptive", "engagement", "engages",
+    "accuracy", "accurate", "consistent", "saves", "outcomes",
+}
+
+_NEGATIVE = {
+    "risk", "risks", "challenge", "challenges", "concern", "concerns",
+    "limitation", "limitations", "danger", "dangers", "problematic",
+    "harmful", "harm", "harms", "threat", "threats", "failure", "failures",
+    "ineffective", "obstacle", "obstacles", "barrier", "barriers",
+    "undermine", "undermines", "hinder", "hinders", "inadequate",
+    "insufficient", "misleading", "uncertain", "unclear", "difficult",
+    "difficulty", "problem", "problems", "issue", "issues", "drawback",
+    "drawbacks", "weakness", "weaknesses", "oppose", "opposition",
+    "controversial", "controversy", "bias", "biased", "flawed",
+    "incomplete", "missing", "lack", "lacking", "absent", "neglect",
+    "inequality", "injustice", "inequity", "exacerbate", "exacerbates",
+    "misuse", "misuses", "abuse", "exploit", "exploits", "dehumanise",
+    "dehumanize", "dystopian", "caution", "cautious", "restrictive",
+    "marginalised", "marginalized", "dystopia", "dystopian", "shallow",
+    "reduced", "diminished", "worse", "struggle", "worsen",
+}
+
+_STOPWORDS = {
+    "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
+    "have", "has", "had", "do", "does", "did", "will", "would", "could",
+    "should", "may", "might", "must", "shall", "can", "need", "used",
+    "to", "of", "in", "for", "on", "with", "at", "by", "from", "up",
+    "about", "into", "through", "during", "before", "after", "above",
+    "below", "between", "out", "off", "over", "under", "again", "further",
+    "then", "once", "and", "but", "or", "nor", "not", "so", "yet",
+    "both", "either", "neither", "each", "this", "that", "these", "those",
+    "it", "its", "they", "them", "their", "we", "our", "you", "your",
+    "he", "she", "his", "her", "who", "which", "what", "when", "where",
+    "how", "why", "all", "any", "few", "more", "most", "other", "some",
+    "such", "only", "same", "than", "too", "very", "just", "also", "as",
+    "if", "while", "although", "because", "since", "unless", "however",
+    "therefore", "thus", "hence", "moreover", "furthermore", "nevertheless",
+    "nonetheless", "instead", "rather", "whether", "paper", "study",
+    "research", "document", "article", "text", "authors", "author",
+    "work", "provide", "provides", "suggest", "suggests", "note", "notes",
+    "show", "shows", "discuss", "discusses", "include", "includes", "use",
+    "uses", "based", "many", "new", "including", "current", "given",
+    "key", "via", "within", "across", "among", "well", "also", "even",
+    "like", "make", "made", "take", "taken", "given", "example",
+    "approach", "approaches", "result", "results", "data", "analysis",
+    "using", "used", "these", "those", "here", "there", "their",
+}
+
+
+# ----------------------------
 # Helpers
 # ----------------------------
 def _clean(text: str) -> str:
     return re.sub(r"\s+", " ", (text or "").strip())
 
 
-def _contains_any(text: str, keywords: list[str]) -> bool:
-    t = text.lower()
-    return any(k in t for k in keywords)
+def _get_stance(text: str) -> str:
+    """Classify text stance as optimistic, critical, balanced, or neutral."""
+    words = set(re.findall(r"\b\w+\b", text.lower()))
+    pos = len(words & _POSITIVE)
+    neg = len(words & _NEGATIVE)
+
+    if pos == 0 and neg == 0:
+        return "neutral"
+    if pos > neg:
+        return "optimistic"
+    if neg > pos:
+        return "critical"
+    return "balanced"
 
 
-def _extract_step_sizes(text: str) -> list[str]:
-    # examples: dt=0.001, dt = 0.0001 seconds
-    matches = re.findall(r"\bdt\s*=\s*([0-9]*\.?[0-9]+)\b", text, flags=re.IGNORECASE)
-    return matches
+def _extract_topics(text: str, top_n: int = 3) -> list[str]:
+    """Extract the top N meaningful content words as topic tags."""
+    words = re.findall(r"\b[a-z]{4,}\b", text.lower())
+    freq: dict[str, int] = defaultdict(int)
+    for w in words:
+        if w not in _STOPWORDS:
+            freq[w] += 1
+
+    sorted_words = sorted(freq.items(), key=lambda x: -x[1])
+    return [w for w, _ in sorted_words[:top_n]]
 
 
-def _extract_frameworks(text: str) -> list[str]:
-    frameworks = []
-    lowered = text.lower()
-
-    if "mpi" in lowered:
-        frameworks.append("MPI")
-    if "openmp" in lowered:
-        frameworks.append("OpenMP")
-    if "cuda" in lowered:
-        frameworks.append("CUDA")
-
-    return frameworks
-
-
-def _extract_topic(text: str) -> Optional[str]:
-    lowered = text.lower()
-
-    if _contains_any(lowered, ["numerical and parallel programming"]):
-        return "numerical and parallel programming"
-    if _contains_any(lowered, ["linear systems", "series"]):
-        return "linear systems and series"
-    if _contains_any(lowered, ["integration", "interpolation", "simulation"]):
-        return "integration and simulation"
-    if _contains_any(lowered, ["spmd", "parallel scaling"]):
-        return "spmd and parallel scaling"
-
-    return None
-
-
-def _extract_subject(text: str) -> str:
-    lowered = text.lower()
-
-    if "exercise #4" in lowered or "exercise 4" in lowered:
-        return "exercise 4"
-    if "exercise #5" in lowered or "exercise 5" in lowered:
-        return "exercise 5"
-    if "assignment" in lowered:
-        return "assignment"
-
-    return "document"
+def _majority_stance(stances: list[str]) -> str:
+    if not stances:
+        return "neutral"
+    counts: dict[str, int] = defaultdict(int)
+    for s in stances:
+        counts[s] += 1
+    return max(counts, key=lambda k: counts[k])
 
 
 # ----------------------------
-# Claim extraction
+# Claim extraction (domain-agnostic)
 # ----------------------------
 def normalize_claims_from_sources(sources: List[Source]) -> List[NormalizedClaim]:
     claims: List[NormalizedClaim] = []
 
     for s in sources:
         text = _clean(s.snippet)
-        if not text:
+        if not text or len(text) < 50:
             continue
 
         doc_id = s.doc_id or "unknown_doc"
-        page = s.page
-        chunk_id = s.chunk_id
-        subject = _extract_subject(text)
+        stance = _get_stance(text)
+        topics = _extract_topics(text, top_n=3)
 
-        topic = _extract_topic(text)
-        if topic:
+        for topic in topics:
             claims.append(
                 NormalizedClaim(
                     doc_id=doc_id,
-                    page=page,
-                    aspect="topic",
-                    subject=subject,
-                    value=topic,
-                    evidence=text,
-                    chunk_id=chunk_id,
-                )
-            )
-
-        frameworks = _extract_frameworks(text)
-        if frameworks:
-            claims.append(
-                NormalizedClaim(
-                    doc_id=doc_id,
-                    page=page,
-                    aspect="frameworks",
-                    subject=subject,
-                    value=", ".join(frameworks),
-                    evidence=text,
-                    chunk_id=chunk_id,
-                )
-            )
-
-        step_sizes = _extract_step_sizes(text)
-        for dt in step_sizes:
-            claims.append(
-                NormalizedClaim(
-                    doc_id=doc_id,
-                    page=page,
-                    aspect="step_size",
-                    subject=subject,
-                    value=dt,
-                    evidence=text,
-                    chunk_id=chunk_id,
-                )
-            )
-
-        if _contains_any(text, ["velocity", "position", "acceleration profile"]):
-            claims.append(
-                NormalizedClaim(
-                    doc_id=doc_id,
-                    page=page,
-                    aspect="task",
-                    subject=subject,
-                    value="compute velocity and position from acceleration profile",
-                    evidence=text,
-                    chunk_id=chunk_id,
-                )
-            )
-
-        if _contains_any(text, ["linear systems", "series approximation", "estimate the value of pi"]):
-            claims.append(
-                NormalizedClaim(
-                    doc_id=doc_id,
-                    page=page,
-                    aspect="task",
-                    subject=subject,
-                    value="solve linear systems and series approximation in parallel",
-                    evidence=text,
-                    chunk_id=chunk_id,
+                    page=s.page,
+                    aspect=topic,
+                    subject=topic,
+                    value=stance,
+                    evidence=text[:300],
+                    chunk_id=s.chunk_id,
                 )
             )
 
@@ -184,103 +174,82 @@ def normalize_claims_from_sources(sources: List[Source]) -> List[NormalizedClaim
 # Comparison logic
 # ----------------------------
 def compare_claims(claims: List[NormalizedClaim]) -> List[ClaimComparison]:
+    if not claims:
+        return []
+
+    # Aggregate stance + evidence per (aspect, doc)
+    by_aspect: dict[str, dict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
+    evidence_by: dict[str, dict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
+
+    for c in claims:
+        by_aspect[c.aspect][c.doc_id].append(c.value)
+        evidence_by[c.aspect][c.doc_id].append(c.evidence)
+
     comparisons: List[ClaimComparison] = []
 
-    # group by aspect only first
-    by_aspect: dict[str, list[NormalizedClaim]] = defaultdict(list)
-    for claim in claims:
-        by_aspect[claim.aspect].append(claim)
+    for aspect, doc_stances in by_aspect.items():
+        docs = list(doc_stances.keys())
+        if len(docs) < 2:
+            continue
 
-    for aspect, grouped_claims in by_aspect.items():
-        # compare only across different documents
-        for i in range(len(grouped_claims)):
-            for j in range(i + 1, len(grouped_claims)):
-                a = grouped_claims[i]
-                b = grouped_claims[j]
+        for i in range(len(docs)):
+            for j in range(i + 1, len(docs)):
+                da, db = docs[i], docs[j]
+                stance_a = _majority_stance(doc_stances[da])
+                stance_b = _majority_stance(doc_stances[db])
 
-                if a.doc_id == b.doc_id:
+                # Only surface meaningful differences — skip if same or both neutral
+                if stance_a == stance_b:
+                    continue
+                if stance_a == "neutral" and stance_b == "neutral":
                     continue
 
-                result = _compare_pair(a, b)
-                if result:
-                    comparisons.append(result)
+                is_conflict = (
+                    (stance_a == "optimistic" and stance_b == "critical")
+                    or (stance_a == "critical" and stance_b == "optimistic")
+                )
 
-    return _dedupe_comparisons(comparisons)
+                ev_a = evidence_by[aspect][da][0] if evidence_by[aspect][da] else ""
+                ev_b = evidence_by[aspect][db][0] if evidence_by[aspect][db] else ""
+
+                label_a = _stance_label(stance_a)
+                label_b = _stance_label(stance_b)
+
+                explanation = (
+                    f"On the topic of '{aspect}', {da} takes a {label_a} stance "
+                    f"while {db} takes a {label_b} stance."
+                )
+
+                comparisons.append(
+                    ClaimComparison(
+                        comparison_type="conflict" if is_conflict else "difference",
+                        aspect=aspect,
+                        subject=aspect,
+                        doc_a=da,
+                        value_a=stance_a,
+                        evidence_a=ev_a,
+                        doc_b=db,
+                        value_b=stance_b,
+                        evidence_b=ev_b,
+                        explanation=explanation,
+                    )
+                )
+
+    return _dedupe_comparisons(comparisons)[:8]
 
 
-def _compare_pair(a: NormalizedClaim, b: NormalizedClaim) -> Optional[ClaimComparison]:
-    va = a.value.strip().lower()
-    vb = b.value.strip().lower()
-
-    if a.aspect == "topic":
-        if va == vb:
-            return None
-        return ClaimComparison(
-            comparison_type="difference",
-            aspect=a.aspect,
-            subject=f"{a.subject} vs {b.subject}",
-            doc_a=a.doc_id,
-            value_a=a.value,
-            evidence_a=a.evidence,
-            doc_b=b.doc_id,
-            value_b=b.value,
-            evidence_b=b.evidence,
-            explanation="The documents emphasize different topics, but this does not necessarily indicate a contradiction.",
-        )
-
-    if a.aspect == "frameworks":
-        if va == vb:
-            return None
-        return ClaimComparison(
-            comparison_type="difference",
-            aspect=a.aspect,
-            subject=f"{a.subject} vs {b.subject}",
-            doc_a=a.doc_id,
-            value_a=a.value,
-            evidence_a=a.evidence,
-            doc_b=b.doc_id,
-            value_b=b.value,
-            evidence_b=b.evidence,
-            explanation="The documents reference different parallel programming frameworks or combinations of frameworks.",
-        )
-
-    if a.aspect == "step_size":
-        if va != vb:
-            return ClaimComparison(
-                comparison_type="difference",
-                aspect=a.aspect,
-                subject=f"{a.subject} vs {b.subject}",
-                doc_a=a.doc_id,
-                value_a=a.value,
-                evidence_a=a.evidence,
-                doc_b=b.doc_id,
-                value_b=b.value,
-                evidence_b=b.evidence,
-                explanation="The documents mention different step sizes. This may reflect different tasks rather than a direct conflict.",
-            )
-        return None
-
-    if a.aspect == "task":
-        if va == vb:
-            return None
-        return ClaimComparison(
-            comparison_type="difference",
-            aspect=a.aspect,
-            subject=f"{a.subject} vs {b.subject}",
-            doc_a=a.doc_id,
-            value_a=a.value,
-            evidence_a=a.evidence,
-            doc_b=b.doc_id,
-            value_b=b.value,
-            evidence_b=b.evidence,
-            explanation="The documents assign different computational tasks, so they differ in scope rather than contradict each other.",
-        )
-
-    return None
+def _stance_label(stance: str) -> str:
+    labels = {
+        "optimistic": "optimistic / supportive",
+        "critical": "critical / cautionary",
+        "balanced": "balanced / mixed",
+        "neutral": "neutral",
+    }
+    return labels.get(stance, stance)
 
 
 def _dedupe_comparisons(items: List[ClaimComparison]) -> List[ClaimComparison]:
-    seen = set()
+    seen: set[tuple] = set()
     out: List[ClaimComparison] = []
 
     for item in items:

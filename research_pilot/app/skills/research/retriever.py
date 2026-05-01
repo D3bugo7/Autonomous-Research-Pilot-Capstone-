@@ -70,6 +70,7 @@ def retrieve_sources(
     question: str,
     user_dir: Path,
     allowed_paths: Optional[list[str]] = None,
+    max_sources: int = FINAL_K,
 ) -> List[Source]:
     """
     Build an index from a specific user's upload directory,
@@ -102,10 +103,11 @@ def retrieve_sources(
         chunks = [c for c in chunks if c.get("path") in allowed]
 
     # diversify after filtering
+    effective_max = max_sources if not calc_query else max(max_sources, 14)
     chunks = _diversify_chunks(
         chunks,
         max_per_doc=5 if calc_query else 3,
-        max_total=18 if calc_query else 12,
+        max_total=effective_max + 4,  # fetch a few extra before final trim
     )
 
     return [
@@ -117,5 +119,5 @@ def retrieve_sources(
             page=c["page"],
             chunk_id=c.get("chunk_id"),
         )
-        for c in chunks[:FINAL_K if not calc_query else 18]
+        for c in chunks[:effective_max]
     ]
