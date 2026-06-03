@@ -4,6 +4,7 @@ export type DocumentListItem = { doc_id: string; filename: string };
 export type ResearchRequest = {
   question: string;
   doc_ids?: string[]; 
+  max_sources?: number;
 };
 
 export type Source = {
